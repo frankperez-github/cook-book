@@ -1,0 +1,16 @@
+{
+  "name": "Recetario de Dulcería",
+  "short_name": "Recetario",
+  "description": "Recetas, costos y ganancias para tu dulcería",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fffaf5",
+  "theme_color": "#d6456b",
+  "lang": "es",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

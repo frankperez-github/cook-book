@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Recetario">
+  <rect width="512" height="512" rx="112" fill="#d6456b"/>
+  <!-- wrapper -->
+  <path d="M150 292h212l-26 128q-3 14-17 14H193q-14 0-17-14z" fill="#fff3e6"/>
+  <g stroke="#f2c4d1" stroke-width="10" stroke-linecap="round">
+    <path d="M200 312l10 100"/><path d="M256 312v100"/><path d="M312 312l-10 100"/>
+  </g>
+  <!-- frosting -->
+  <rect x="132" y="236" width="248" height="76" rx="38" fill="#ffffff"/>
+  <rect x="168" y="178" width="176" height="76" rx="38" fill="#ffffff"/>
+  <rect x="206" y="124" width="100" height="70" rx="35" fill="#ffffff"/>
+  <path d="M170 262q40 18 86 0t86 0" fill="none" stroke="#f9d3de" stroke-width="9" stroke-linecap="round"/>
+  <path d="M200 204q56 16 112 0" fill="none" stroke="#f9d3de" stroke-width="9" stroke-linecap="round"/>
+  <!-- cherry -->
+  <path d="M256 104q4-34 34-46" fill="none" stroke="#3f8f5a" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="256" cy="110" r="26" fill="#a81f45"/>
+  <circle cx="247" cy="101" r="7" fill="#ffffff" opacity=".55"/>
+</svg>

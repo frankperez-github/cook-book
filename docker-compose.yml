@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    # Solo local: el HTTPS lo termina el nginx del servidor (ver deploy/nginx.conf)
+    ports: ["127.0.0.1:${APP_PORT:-3015}:3000"]
+    networks: [mysql]
+
+networks:
+  mysql:
+    external: true
+    name: ${MYSQL_NETWORK}
