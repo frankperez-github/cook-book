@@ -48,7 +48,7 @@ export async function initDb() {
       // A line is either an ingredient (ingredientId) or another recipe used as a component (subRecipeId).
       subRecipeId: { type: T.STRING(32), allowNull: true },
     },
-    { timestamps: false, indexes: [{ fields: ['subRecipeId'] }] }
+    { timestamps: false }
   );
 
   const RecipeStep = sequelize.define(
@@ -90,8 +90,11 @@ export async function initDb() {
   const itemCols = await qi.describeTable('RecipeItems');
   if (!itemCols.subRecipeId) {
     await qi.addColumn('RecipeItems', 'subRecipeId', { type: T.STRING(32), allowNull: true });
-    await qi.addIndex('RecipeItems', ['subRecipeId']);
     console.log('Migración: columna RecipeItems.subRecipeId agregada');
+  }
+  // Index is created here (not in the model) so sync() never references a column that doesn't exist yet.
+  if (!(await qi.showIndex('RecipeItems')).some((ix) => ix.name === 'recipe_items_sub_recipe_id')) {
+    await qi.addIndex('RecipeItems', ['subRecipeId'], { name: 'recipe_items_sub_recipe_id' });
   }
   if (itemCols.ingredientId?.allowNull === false) {
     await qi.changeColumn('RecipeItems', 'ingredientId', { type: T.STRING(32), allowNull: true });

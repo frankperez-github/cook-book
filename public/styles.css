@@ -179,7 +179,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .cover-pick img { width: 100%; height: 100%; object-fit: cover; }
 .section-title { font-size: 18px; font-weight: 800; margin-top: 6px; }
-.edit-ing { display: grid; grid-template-columns: 1fr 78px 72px 40px; gap: 8px; align-items: center; }
+.edit-ing { display: grid; grid-template-columns: 1fr 68px 66px 32px; gap: 8px; align-items: center; }
 .pick {
   min-height: 48px; text-align: left; padding: 10px 14px; background: var(--card); border: 1.5px solid var(--line);
   border-radius: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;
@@ -187,7 +187,7 @@ h1, h2, h3, p { margin: 0; }
 .pick.empty-pick { color: var(--muted); font-weight: 400; }
 .pick.warn { border-color: var(--warn); }
 .edit-ing input, .edit-ing select { min-height: 48px; padding: 8px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; width: 100%; outline: none; }
-.x { width: 40px; height: 48px; border: 0; background: none; color: var(--muted); font-size: 22px; }
+.x { width: 32px; height: 48px; border: 0; background: none; color: var(--muted); font-size: 22px; }
 .step-edit { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .step-edit textarea { width: 100%; border: 0; outline: none; background: none; resize: none; min-height: 64px; line-height: 1.4; }
 .step-edit .acts { display: flex; gap: 8px; align-items: center; }
