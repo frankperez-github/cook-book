@@ -45,8 +45,10 @@ export async function initDb() {
       qty: { type: T.DOUBLE, allowNull: false, defaultValue: 0 },
       unit: { type: T.STRING(4), allowNull: false },
       position: { type: T.INTEGER, allowNull: false, defaultValue: 0 },
+      // A line is either an ingredient (ingredientId) or another recipe used as a component (subRecipeId).
+      subRecipeId: { type: T.STRING(32), allowNull: true },
     },
-    { timestamps: false }
+    { timestamps: false, indexes: [{ fields: ['subRecipeId'] }] }
   );
 
   const RecipeStep = sequelize.define(
@@ -63,7 +65,7 @@ export async function initDb() {
 
   Recipe.hasMany(RecipeItem, { as: 'items', foreignKey: { name: 'recipeId', allowNull: false }, onDelete: 'CASCADE' });
   Recipe.hasMany(RecipeStep, { as: 'steps', foreignKey: { name: 'recipeId', allowNull: false }, onDelete: 'CASCADE' });
-  RecipeItem.belongsTo(Ingredient, { foreignKey: { name: 'ingredientId', allowNull: false }, onDelete: 'RESTRICT' });
+  RecipeItem.belongsTo(Ingredient, { foreignKey: { name: 'ingredientId', allowNull: true }, onDelete: 'RESTRICT' });
 
   // Wait for MySQL (the container may still be starting).
   for (let i = 1; ; i++) {
@@ -83,6 +85,17 @@ export async function initDb() {
   if (!recipeCols.yieldUnit) {
     await qi.addColumn('Recipes', 'yieldUnit', { type: T.STRING(12), allowNull: false, defaultValue: 'porciones' });
     console.log('Migración: columna Recipes.yieldUnit agregada');
+  }
+
+  const itemCols = await qi.describeTable('RecipeItems');
+  if (!itemCols.subRecipeId) {
+    await qi.addColumn('RecipeItems', 'subRecipeId', { type: T.STRING(32), allowNull: true });
+    await qi.addIndex('RecipeItems', ['subRecipeId']);
+    console.log('Migración: columna RecipeItems.subRecipeId agregada');
+  }
+  if (itemCols.ingredientId?.allowNull === false) {
+    await qi.changeColumn('RecipeItems', 'ingredientId', { type: T.STRING(32), allowNull: true });
+    console.log('Migración: RecipeItems.ingredientId ahora admite NULL');
   }
 
   return { sequelize, Ingredient, Photo, Recipe, RecipeItem, RecipeStep, Setting };

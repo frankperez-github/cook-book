@@ -66,7 +66,7 @@ const recipeOut = (r) => ({
   other: r.other,
   created: +r.createdAt,
   updated: +r.updatedAt,
-  items: [...r.items].sort((a, b) => a.position - b.position).map((i) => ({ ingId: i.ingredientId, qty: i.qty, unit: i.unit })),
+  items: [...r.items].sort((a, b) => a.position - b.position).map((i) => ({ ingId: i.ingredientId, subId: i.subRecipeId, qty: i.qty, unit: i.unit })),
   steps: [...r.steps].sort((a, b) => a.position - b.position).map((s) => ({ text: s.text, photo: s.photoId })),
 });
 const ingOut = (i) => ({ id: i.id, name: i.name, price: i.price, qty: i.qty, unit: i.unit });
@@ -149,6 +149,29 @@ app.get(
 );
 
 /* ---- recipes ---- */
+// A recipe may use other recipes as components, but never itself, directly or through others.
+async function assertNoCycle(id, items) {
+  const subIds = [...new Set(items.map((i) => i.subRecipeId).filter(Boolean))];
+  if (!subIds.length) return;
+  if ((await Recipe.count({ where: { id: subIds } })) !== subIds.length) throw bad('Una de las recetas usadas ya no existe');
+  const rows = await RecipeItem.findAll({
+    where: { subRecipeId: { [Op.ne]: null }, recipeId: { [Op.ne]: id } },
+    attributes: ['recipeId', 'subRecipeId'],
+    raw: true,
+  });
+  const graph = new Map();
+  for (const r of rows) graph.set(r.recipeId, [...(graph.get(r.recipeId) || []), r.subRecipeId]);
+  const seen = new Set();
+  const stack = [...subIds];
+  while (stack.length) {
+    const n = stack.pop();
+    if (n === id) throw bad('Esa combinación haría que una receta se contenga a sí misma');
+    if (seen.has(n)) continue;
+    seen.add(n);
+    stack.push(...(graph.get(n) || []));
+  }
+}
+
 app.put(
   '/api/recipes/:id',
   wrap(async (req, res) => {
@@ -157,9 +180,15 @@ app.put(
     if (!ID_RE.test(id)) throw bad('Id inválido');
     if (!String(b.name || '').trim()) throw bad('Falta el nombre');
     const items = (b.items || []).map((i, position) => {
-      if (!ID_RE.test(i.ingId) || !UNITS.has(i.unit)) throw bad('Ingrediente inválido');
-      return { ingredientId: i.ingId, qty: num(i.qty), unit: i.unit, position };
+      if (!UNITS.has(i.unit)) throw bad('Unidad inválida');
+      if (i.subId) {
+        if (!ID_RE.test(i.subId) || i.subId === id) throw bad('Una receta no puede contenerse a sí misma');
+        return { ingredientId: null, subRecipeId: i.subId, qty: num(i.qty), unit: i.unit, position };
+      }
+      if (!ID_RE.test(i.ingId)) throw bad('Ingrediente inválido');
+      return { ingredientId: i.ingId, subRecipeId: null, qty: num(i.qty), unit: i.unit, position };
     });
+    await assertNoCycle(id, items);
     const steps = (b.steps || []).map((s, position) => ({
       text: String(s.text || '').slice(0, 5000),
       photoId: s.photo && ID_RE.test(s.photo) ? s.photo : null,
@@ -192,6 +221,11 @@ app.put(
 app.delete(
   '/api/recipes/:id',
   wrap(async (req, res) => {
+    const parents = await RecipeItem.findAll({ where: { subRecipeId: req.params.id }, attributes: ['recipeId'], raw: true });
+    if (parents.length) {
+      const names = await Recipe.findAll({ where: { id: [...new Set(parents.map((p) => p.recipeId))] }, attributes: ['name'], raw: true });
+      throw new HttpError(409, `No se puede eliminar: se usa en ${names.map((n) => n.name).join(', ')}`);
+    }
     await sequelize.transaction(async (t) => {
       await Photo.destroy({ where: { recipeId: req.params.id }, transaction: t });
       await Recipe.destroy({ where: { id: req.params.id }, transaction: t });

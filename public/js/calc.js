@@ -17,11 +17,24 @@ export const YIELD_ONE = { porciones: 'porción', unidades: 'unidad', g: 'g', kg
 export const YIELD_STEP = { porciones: 1, unidades: 1, g: 100, kg: 0.5, ml: 100, l: 0.5 };
 
 // Quantity for display: 1500 g -> "1,5 kg".
-export function fmtQty(qty, unit) {
+export function fmtQty(qty, unit, sub) {
   if (unit === 'g' && qty >= 1000) return `${fmtNum(qty / 1000)} kg`;
   if (unit === 'ml' && qty >= 1000) return `${fmtNum(qty / 1000)} L`;
-  return `${fmtNum(qty)} ${UNIT_LABEL[unit]}`;
+  return `${fmtNum(qty)} ${unitLabelFor(unit, sub)}`;
 }
+
+// How a recipe's yield maps to the unit families, so another recipe can use it as a component.
+export const YIELD_BASE = {
+  porciones: { base: 'u', f: 1 },
+  unidades: { base: 'u', f: 1 },
+  g: { base: 'g', f: 1 },
+  kg: { base: 'g', f: 1000 },
+  ml: { base: 'ml', f: 1 },
+  l: { base: 'ml', f: 1000 },
+};
+export const defaultUnitFor = (sub) => FAMILY_DEFAULT[YIELD_BASE[sub.yieldUnit || 'porciones'].base];
+// "u" means "portions" or "units" depending on the component recipe.
+export const unitLabelFor = (unit, sub) => (unit === 'u' && sub ? YIELD_LABEL[sub.yieldUnit || 'porciones'] : UNIT_LABEL[unit]);
 
 export const family = (unit) => UNITS[unit]?.base || 'u';
 
@@ -37,11 +50,23 @@ export function itemCost(item, ing) {
   return { cost: (+item.qty || 0) * UNITS[item.unit].f * p, ok: p > 0 };
 }
 
-export function analyze(recipe, ingMap) {
+// Cost of one recipe line: an ingredient, or a share of another recipe's total cost.
+export function lineCost(item, ingMap, recipeMap, stack) {
+  if (!item.subId) return itemCost(item, ingMap.get(item.ingId));
+  const sub = recipeMap.get(item.subId);
+  if (!sub || stack.has(sub.id)) return { cost: 0, ok: false };
+  const yb = YIELD_BASE[sub.yieldUnit || 'porciones'];
+  if (family(item.unit) !== yb.base) return { cost: 0, ok: false };
+  const a = analyze(sub, ingMap, recipeMap, new Set([...stack, sub.id]));
+  const subBase = a.y * yb.f;
+  return { cost: subBase > 0 ? (((+item.qty || 0) * UNITS[item.unit].f) / subBase) * a.total : 0, ok: a.missing === 0 };
+}
+
+export function analyze(recipe, ingMap, recipeMap = new Map(), stack = new Set(recipe.id ? [recipe.id] : [])) {
   let ingredients = 0;
   let missing = 0;
   for (const it of recipe.items || []) {
-    const c = itemCost(it, ingMap.get(it.ingId));
+    const c = lineCost(it, ingMap, recipeMap, stack);
     ingredients += c.cost;
     if (!c.ok) missing++;
   }

@@ -1,5 +1,5 @@
 import * as api from './api.js';
-import { YIELD_UNITS, YIELD_LABEL, YIELD_ONE, YIELD_STEP, fmtQty, UNITS, UNIT_LABEL, FAMILY_UNITS, FAMILY_DEFAULT, family, itemCost, analyze, fmtNum, fmtMoney, matchIngredient } from './calc.js';
+import { YIELD_UNITS, YIELD_LABEL, YIELD_ONE, YIELD_STEP, fmtQty, lineCost, defaultUnitFor, unitLabelFor, UNITS, UNIT_LABEL, FAMILY_UNITS, FAMILY_DEFAULT, family, itemCost, analyze, fmtNum, fmtMoney, matchIngredient } from './calc.js';
 
 const $app = document.getElementById('app');
 const $ov = document.getElementById('overlay');
@@ -20,6 +20,14 @@ const uid = api.uid;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (n) => fmtMoney(n, S.set.currency);
 const ingMap = () => new Map(S.ings.map((i) => [i.id, i]));
+const recMap = () => new Map(S.recipes.map((r) => [r.id, r]));
+// Does recipe `recId` contain `targetId` somewhere down its components?
+function dependsOn(recId, targetId, seen = new Set()) {
+  if (!targetId || seen.has(recId)) return false;
+  seen.add(recId);
+  const r = S.recipes.find((x) => x.id === recId);
+  return !!r?.items.some((i) => i.subId && (i.subId === targetId || dependsOn(i.subId, targetId, seen)));
+}
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const pct = (m) => (m == null ? '' : `${Math.round(m * 100)}%`);
 
@@ -160,6 +168,7 @@ window.addEventListener('hashchange', route);
 /* ---------- home ---------- */
 function listHtml() {
   const map = ingMap();
+  const rmap = recMap();
   const q = searchQ.trim().toLowerCase();
   const rs = S.recipes.filter((r) => !q || r.name.toLowerCase().includes(q)).sort((a, b) => b.updated - a.updated);
   if (!S.recipes.length) {
@@ -169,7 +178,7 @@ function listHtml() {
   if (!rs.length) return `<div class="empty"><p>No encontré «${esc(searchQ)}»</p></div>`;
   return rs
     .map((r) => {
-      const a = analyze(r, map);
+      const a = analyze(r, map, rmap);
       const chip =
         a.sale <= 0 ? `<span class="chip warn">Sin precio</span>` : `<span class="chip ${a.profit < 0 ? 'bad' : ''}">${pct(a.margin)}</span>`;
       const sub = a.missing ? `⚠ Faltan precios de ingredientes` : `Costo ${money(a.per)} · Venta ${money(a.sale)}`;
@@ -205,7 +214,8 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // Everything that depends on the amount to prepare. Per-unit numbers never change; quantities and totals scale.
 function scaledHtml(r, want) {
   const map = ingMap();
-  const a = analyze(r, map);
+  const rmap = recMap();
+  const a = analyze(r, map, rmap);
   const f = want / a.y;
   const yu = r.yieldUnit || 'porciones';
   const one = YIELD_ONE[yu];
@@ -216,10 +226,12 @@ function scaledHtml(r, want) {
   const ings = r.items
     .map((it) => {
       const ing = map.get(it.ingId);
-      const c = itemCost(it, ing);
-      return `<div class="ing-line"><div class="n">${esc(ing?.name || '¿?')}</div>
-        <div class="q">${fmtQty(it.qty * f, it.unit)}</div>
-        <div class="c ${c.ok ? '' : 'miss'}">${c.ok ? money(c.cost * f) : '—'}</div></div>`;
+      const sub = it.subId ? rmap.get(it.subId) : null;
+      const c = lineCost(it, map, rmap, new Set([r.id]));
+      const name = sub ? `${esc(sub.name)} <span class="tag">receta ›</span>` : esc(ing?.name || '¿?');
+      return `<${sub ? `button data-go="#/r/${sub.id}"` : 'div'} class="ing-line"><div class="n">${name}</div>
+        <div class="q">${fmtQty(it.qty * f, it.unit, sub)}</div>
+        <div class="c ${c.ok ? '' : 'miss'}">${c.ok ? money(c.cost * f) : '—'}</div></${sub ? 'button' : 'div'}>`;
     })
     .join('');
   const steps = r.steps
@@ -300,15 +312,17 @@ function renderEdit() {
   const y = scrollY;
   const d = draft;
   const map = ingMap();
+  const rmap = recMap();
   const rows = d.items
     .map((it, i) => {
       const ing = map.get(it.ingId);
-      const name = ing?.name || it.newName || '';
+      const sub = it.subId ? rmap.get(it.subId) : null;
+      const name = sub?.name || ing?.name || it.newName || '';
       const units = FAMILY_UNITS[family(it.unit)]
-        .map((u) => `<option value="${u}" ${u === it.unit ? 'selected' : ''}>${UNIT_LABEL[u]}</option>`)
+        .map((u) => `<option value="${u}" ${u === it.unit ? 'selected' : ''}>${unitLabelFor(u, sub)}</option>`)
         .join('');
       return `<div class="edit-ing">
-        <button class="pick ${name ? '' : 'empty-pick'} ${!ing && it.newName ? 'warn' : ''}" data-act="pick" data-i="${i}">${esc(name || 'Elegir ingrediente')}</button>
+        <button class="pick ${name ? '' : 'empty-pick'} ${!ing && !sub && it.newName ? 'warn' : ''}" data-act="pick" data-i="${i}">${sub ? '📖 ' : ''}${esc(name || 'Elegir ingrediente o receta')}</button>
         <input type="number" inputmode="decimal" step="any" min="0" placeholder="0" value="${it.qty ?? ''}" data-item="qty" data-i="${i}" aria-label="Cantidad">
         <select data-item="unit" data-i="${i}" aria-label="Unidad">${units}</select>
         <button class="x" data-act="del-item" data-i="${i}" aria-label="Quitar">✕</button></div>`;
@@ -340,7 +354,7 @@ function renderEdit() {
     </div>
     <h2 class="section-title">Ingredientes</h2>
     ${rows}
-    <button class="add" data-act="add-item">＋ Agregar ingrediente</button>
+    <button class="add" data-act="add-item">＋ Agregar ingrediente o receta</button>
     <h2 class="section-title">Preparación</h2>
     ${steps}
     <button class="add" data-act="add-step">＋ Agregar paso</button>
@@ -364,8 +378,9 @@ function refreshSummary() {
   const el = document.getElementById('sum');
   if (!el) return;
   const a = analyze(
-    { items: draft.items.filter((i) => i.ingId), yield: draft.yield, salePrice: draft.salePrice, other: draft.other },
-    ingMap()
+    { id: draft.id, items: draft.items.filter((i) => i.ingId || i.subId), yield: draft.yield, salePrice: draft.salePrice, other: draft.other },
+    ingMap(),
+    recMap()
   );
   if (a.sale > 0) {
     el.innerHTML = `Costo <b>${money(a.per)}</b> por ${YIELD_ONE[draft.yieldUnit || 'porciones']}<br>Ganancia <span class="profit ${a.profit < 0 ? 'neg' : ''}">${money(a.profit)} (${pct(a.margin)})</span>`;
@@ -386,11 +401,18 @@ function ingredientPicker(i) {
         const q = inp.value.trim();
         const ql = q.toLowerCase();
         const found = S.ings.filter((x) => !ql || x.name.toLowerCase().includes(ql)).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        const subs = S.recipes
+          .filter((r) => r.id !== draft.id && !dependsOn(r.id, draft.id) && (!ql || r.name.toLowerCase().includes(ql)))
+          .sort((a, b) => a.name.localeCompare(b.name, 'es'));
         let h = found
           .map((x) => `<button class="pick-item" data-pick="${x.id}">${esc(x.name)} ${x.price > 0 ? '' : '<small>· sin precio</small>'}</button>`)
           .join('');
         const exact = found.some((x) => x.name.toLowerCase() === ql);
         if (q && !exact) h += `<button class="pick-item new" data-create="${esc(q)}">＋ Crear «${esc(q)}»</button>`;
+        if (subs.length) {
+          h += `<p class="hint" style="padding:8px 4px 0"><b>Mis recetas</b> · úsalas como componente</p>`;
+          h += subs.map((r) => `<button class="pick-item" data-sub="${r.id}">📖 ${esc(r.name)} <small>· rinde ${fmtNum(r.yield)} ${YIELD_LABEL[r.yieldUnit || 'porciones']}</small></button>`).join('');
+        }
         if (!h) h = `<p class="hint" style="text-align:center;padding:14px">Escribe el nombre del ingrediente para crearlo.</p>`;
         out.innerHTML = h;
       };
@@ -402,13 +424,23 @@ function ingredientPicker(i) {
         if (b.dataset.pick) {
           const ing = S.ings.find((x) => x.id === b.dataset.pick);
           it.ingId = ing.id;
+          it.subId = null;
           it.newName = '';
           it.unit = FAMILY_DEFAULT[family(ing.unit)];
+          closeSheet();
+          renderEdit();
+        } else if (b.dataset.sub) {
+          const sub = S.recipes.find((x) => x.id === b.dataset.sub);
+          it.subId = sub.id;
+          it.ingId = null;
+          it.newName = '';
+          it.unit = defaultUnitFor(sub);
           closeSheet();
           renderEdit();
         } else if (b.dataset.create) {
           ingredientSheet({ name: b.dataset.create }, (ing) => {
             it.ingId = ing.id;
+            it.subId = null;
             it.newName = '';
             it.unit = FAMILY_DEFAULT[family(ing.unit)];
             renderEdit();
@@ -416,7 +448,7 @@ function ingredientPicker(i) {
         }
       });
       draw();
-      if (!draft.items[i].ingId) setTimeout(() => inp.focus(), 50);
+      if (!draft.items[i].ingId && !draft.items[i].subId) setTimeout(() => inp.focus(), 50);
     }
   );
 }
@@ -435,7 +467,7 @@ async function saveDraft(btn) {
   btn.disabled = true;
   try {
   for (const it of d.items) {
-    if (it.ingId || !it.newName?.trim()) continue;
+    if (it.ingId || it.subId || !it.newName?.trim()) continue;
     let ing = findIng(it.newName, family(it.unit));
     if (!ing) {
       const f = family(it.unit);
@@ -454,7 +486,7 @@ async function saveDraft(btn) {
     yieldUnit: d.yieldUnit || 'porciones',
     salePrice: +d.salePrice || 0,
     other: +d.other || 0,
-    items: d.items.filter((i) => i.ingId).map((i) => ({ ingId: i.ingId, qty: +i.qty || 0, unit: i.unit })),
+    items: d.items.filter((i) => i.ingId || i.subId).map((i) => ({ ingId: i.ingId || null, subId: i.subId || null, qty: +i.qty || 0, unit: i.unit })),
     steps: await Promise.all(d.steps.filter((s) => s.text.trim() || s.photo).map(async (s) => ({ text: s.text.trim(), photo: await photoId(s.photo) }))),
   };
   const saved = await api.putRecipe(rec);
@@ -639,6 +671,10 @@ document.addEventListener('click', async (e) => {
     case 'rm-step-photo': draft.steps[i].photo = null; return renderEdit();
     case 'save': return saveDraft(el);
     case 'delete':
+      {
+        const parents = S.recipes.filter((r) => r.items.some((i) => i.subId === draft.id));
+        if (parents.length) return toast(`No se puede eliminar: se usa en ${parents.map((r) => r.name).join(', ')}`);
+      }
       if (!confirm('¿Eliminar esta receta para siempre?')) return;
       if ((await guard(() => api.delRecipe(draft.id))) === undefined) return;
       S.recipes = S.recipes.filter((r) => r.id !== draft.id);

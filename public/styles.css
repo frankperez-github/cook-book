@@ -245,3 +245,8 @@ details.more .field { padding-bottom: 12px; }
 .stepper button { width: 42px; height: 44px; border: 0; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-size: 24px; font-weight: 700; }
 .stepper input { width: 68px; min-height: 44px; text-align: center; font-weight: 700; font-size: 18px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); outline: none; }
 .stepper input:focus { border-color: var(--accent); }
+
+/* Sub-recipes */
+button.ing-line { width: 100%; border: 0; background: none; text-align: left; font: inherit; color: inherit; }
+button.ing-line:active { background: var(--accent-soft); }
+.tag { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 999px; margin-left: 4px; white-space: nowrap; }
